@@ -1,0 +1,136 @@
+## Copyright © 2020, Oracle and/or its affiliates. 
+## All rights reserved. The Universal Permissive License (UPL), Version 1.0 as shown at http://oss.oracle.com/licenses/upl
+
+    title: "Setup for Private DNS Lab"
+    stackDescription: Setup for Private DNS Lab
+    schemaVersion: 1.1.0
+    version: "20190404"
+    locale: "en"
+
+    variableGroups:
+    - title: General Configuration
+      visible: false
+      variables:
+      - compartment_ocid
+      - tenancy_ocid
+      - region
+      - instance_os
+
+    - title: Required Configuration
+      visible: true  
+      variables:
+      - ssh_public_key
+      - hub_vcn_display_name
+      - hub_vcn_cidr_block
+      - hub_vcn_dns_label
+      - hub_subnet_pub01_display_name
+      - hub_subnet_pub01_cidr_block
+      - spoke01_vcn_display_name
+      - spoke01_vcn_cidr_block
+      - spoke01_vcn_dns_label
+      - spoke01_subnet_priv01_display_name
+      - spoke01_subnet_priv01_cidr_block
+      
+
+    - title: Optional Configuration
+      visible: true
+      variables:      
+      - linux_os_version
+      - InstanceShape
+    
+    variables:
+
+      compartment_ocid:
+        type: oci:identity:compartment:id
+        required: true
+        title: Compartment
+        description: Compartment where you want to create the solution resources
+
+      region:
+        type: oci:identity:region:name
+        required: true
+        title: Region
+        description: Region where you want to deploy the resources defined by this stack
+
+      ssh_public_key:
+        type: oci:core:ssh:publickey
+        required: true
+        title: SSH public Key
+        description: Public key
+
+      hub_vcn_cidr_block:
+        type: string
+        required: true
+        title: HUB VCN CIDR Block
+        description: CIDR block that will be assigned to the HUB VCN
+
+      hub_vcn_dns_label:
+        type: string
+        required: true
+        title: DNS Label HUB VCN
+        description: DNS label that will be asigned to the HUB VCN
+
+      hub_vcn_display_name:
+        type: string
+        required: true
+        title: VNC Name
+        description: Display name assigned to the HUB VCN
+
+      hub_subnet_pub01_cidr_block:
+        type: string
+        required: true
+        title: PUB Subnet CIDR Block
+        description: CIDR block that will be assigned to the Public Subnet in the HUB VCN
+
+      hub_subnet_pub01_display_name:
+        type: string
+        required: true
+        title: PUB Subnet Display Name  
+        description: Display name assigned to the Public subnet in the HUB VCN
+
+      spoke01_vcn_cidr_block:
+        type: string
+        required: true
+        title: Spoke 1 VCN CIDR Block
+        description: CIDR block that will be assigned to the Spoke 1 VCN
+
+      spoke01_vcn_dns_label:
+        type: string
+        required: true
+        title: DNS Label SPOKE 1 VCN
+        description: DNS label that will be asigned to the SPOKE 1 VCN
+
+      spoke01_vcn_display_name:
+        type: string
+        required: true
+        title: SPOKE 1 VCN Display Name
+        description: Display name assigned to the Spoke 1 VCN
+
+      spoke01_subnet_priv01_cidr_block:
+        type: string
+        required: true
+        title: Private Subnet CIDR Block on Spoke 1
+        description: CIDR block that will be assigned to the Private Subnet in the Spoke 1 VCN
+
+      spoke01_subnet_priv01_display_name:
+        type: string
+        required: true
+        title: Private Subnet Display Name
+        description: Display name assigned to the private subnet in the Spoke 1 VCN
+      
+      InstanceShape:
+          type: oci:core:instanceshape:name
+          required: false
+          title: Instance Shape
+          description: A shape is a template that determines the number of CPUs, amount of memory, and other resources allocated to Bastion instance.
+          default: "VM.Standard.E2.1.Micro"
+          dependsOn:
+            compartmentId: ${compartment_ocid}
+
+      instance_os:
+        type: enum
+        title: "Image OS"
+        description: "The OS/image installed on the Bastion instance."
+        enum:
+          - "Oracle Linux - Latest Image"
+        required: false

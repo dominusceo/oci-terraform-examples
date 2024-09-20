@@ -1,0 +1,39 @@
+---
+- name: 
+  hosts: frontends
+  become: true
+  collections:
+    - oracle.oci
+  vars:
+    # common networking definitions
+    quad_zero_route: "0.0.0.0/0"
+    TCP_protocol: "6"
+    SSH_port: "22"
+    vcn_name: "samplebootvolumevcn"
+    vcn_cidr_block: "10.12.0.0/16"
+    vcn_dns_label: "{{ vcn_dns_label }}"
+    ig_name: "{{ ig_name }}" 
+    route_table_name: "samplebootvolumeroutetable"
+    # route all internet access to our Internet Gateway
+    route_table_rules:
+      - cidr_block: "{{ quad_zero_route }}"
+        network_entity_id: "{{ ig_name }}"
+    subnet_cidr: "10.12.0./28"
+    subnet_name: "samplebootvolumesubnet"
+    subnet_dns_label: "testsubnetbv"
+    securitylist_name: "SL"
+    instance_name: "samplebootvolumeinstance"
+    instance_shape: "{{ lookup('env', 'SAMPLE_INSTANCE_SHAPE') | default('VM.Standard2.1', true) }}"
+    instance_hostname: "testinstancebv"
+    bootvolume_name: "samplebootvolume"
+    instance_ad: "{{ lookup('env', 'SAMPLE_AD_NAME') }}"
+    instance_compartment: "{{ lookup('env', 'SAMPLE_COMPARTMENT_OCID') }}"
+    # provide an OL image
+    instance_image: "{{ lookup('env', 'SAMPLE_IMAGE_OCID') }}"
+
+  tasks:
+    - block:
+        - name: List boot_volume_attachments
+          oci_compute_boot_volume_attachment_facts:
+            availability_domain: "{{ adDomain }}"
+            compartment_id: "{{ compartment_ocid }}"

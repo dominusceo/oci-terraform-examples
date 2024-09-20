@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../../oci-network-firewall"
+		},
+		{
+			"path": "../../../oci-weblogic-server"
+		},
+		{
+			"path": "../.."
+		}
+	],
+	"settings": {}
+}

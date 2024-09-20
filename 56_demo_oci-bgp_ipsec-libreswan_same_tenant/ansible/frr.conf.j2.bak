@@ -1,0 +1,58 @@
+#Edit the file /etc/frr/frr.conf and add this info:
+#Autor: ricardo.d.carrillo@oracle.com
+! -*- bgp -*-
+#frr defaults datacenter
+frr defaults traditional
+log file /var/log/frr/frr.log
+log syslog informational
+hostname {{ hostname_vpn }}
+no ip forwarding
+no ipv6 forwarding
+no service integrated-vtysh-config
+!
+debug bgp neighbor-events
+ip route-id {{ router_id }}
+ip route {{ tunnsegment_1 }} {{neighbor_1}}
+ip route {{ tunnsegment_2 }} {{neighbor_2}}
+!ip route {{ onprem_cidr_block }} {{ cpe_local_ip }}
+interface vti1
+ip address {{ tunnel1_cidr }}
+!
+interface vti2
+ip address {{ tunnel2_cidr }}
+
+!enable password please-set-at-here
+router bgp {{ bgp_as }}
+  bgp log-neighbor-changes
+  bgp router-id {{ router_id }}
+  timers 6 18
+   neighbor {{ neighbor_1 }} remote-as 31898
+   neighbor {{ neighbor_1 }} ebgp-multihop 255
+   neighbor {{ neighbor_1 }} timers 6 18
+   neighbor {{ neighbor_2 }} remote-as 31898
+   neighbor {{ neighbor_2 }} ebgp-multihop 255
+   neighbor {{ neighbor_2 }} timers 6 18
+!
+  address-family ipv4 unicast
+  redistribute static
+    network {{ tunnsegment_3 }}
+    network {{ tunnsegment_1 }}
+    network {{ tunnsegment_2 }}
+    neighbor {{ neighbor_1 }} next-hop-self
+    neighbor {{ neighbor_1 }} route-map ALLOW-ALL in
+    neighbor {{ neighbor_1 }} route-map BGP-ADVERTISE-OUT out
+    neighbor {{ neighbor_2 }} next-hop-self
+    neighbor {{ neighbor_2 }} route-map ALLOW-ALL in
+    neighbor {{ neighbor_2 }} route-map BGP-ADVERTISE-OUT out
+  exit-address-family
+!
+
+ip prefix-list BGP-OUT seq 10 permit {{ tunnsegment_1 }}
+ip prefix-list BGP-OUT seq 20 permit {{ tunnsegment_2 }}
+ip prefix-list BGP-OUT seq 30 permit {{ tunnsegment_3 }}
+
+route-map BGP-ADVERTISE-OUT permit 10
+ match ip address prefix-list BGP-OUT
+!
+route-map ALLOW-ALL permit 100
+line vty

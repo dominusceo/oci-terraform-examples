@@ -1,0 +1,122 @@
+---
+- hosts: all
+  become: yes
+  vars_files:
+    - ./vpn_vars/oci-tunnel1.yml
+    - ./vpn_vars/oci-tunnel2.yml
+    - ./frr_vars/frr.yml
+    - ../tf-ansible-extra-vars.yml
+
+  tasks:
+  - name: install libreswan
+    yum:
+      name: libreswan
+      state: installed
+  
+  - name: Install and configure frr repo
+    shell: "rpm -e frr-stable-repo ; rpm -Uhv https://rpm.frrouting.org/repo/frr-stable-repo-1-0.el8.noarch.rpm"
+    register: outrpm
+  
+  - name: install frr 
+    yum:
+      name: frr
+      state: installed
+    become_user: root
+
+  - name: install frr-pythontools
+    yum:
+      name: frr-pythontools
+      state: installed 
+    become_user: root     
+
+  - name: write the vpn config file
+    template: src=libreswan.j2 dest=/etc/ipsec.d/oci-vpn-tunnels.conf
+    become: yes
+
+  - name: write the vpn secrets file
+    template: src=libreswan_secrets.j2 dest=/etc/ipsec.d/oci-vpn-secrets.secrets
+    become: true
+
+  #- name: Apply Permissions for frr
+  #  shell: chmod -R 777 /etc/frr
+  #  become_user: root
+
+  - name: Enable Ibr_netfilter IPv4
+    copy:
+      dest:  /etc/sysctl.d/50-libreswan.conf
+      content: |
+        net.ipv4.ip_forward = 1
+        net.ipv4.conf.default.rp_filter = 0
+        net.ipv4.conf.all.rp_filter = 0
+        net.ipv4.conf.all.send_redirects = 0
+        net.ipv4.conf.default.send_redirects = 0
+        net.ipv4.icmp_ignore_bogus_error_responses = 1
+        net.ipv4.conf.default.log_martians = 0
+        net.ipv4.conf.all.log_martians = 0
+        net.ipv4.conf.default.accept_source_route = 0
+        net.ipv6.conf.default.accept_source_route = 0
+        net.ipv4.conf.all.accept_redirects = 0
+        net.ipv6.conf.all.accept_redirects = 0
+        net.ipv4.conf.default.accept_redirects = 0
+        net.ipv6.conf.default.accept_redirects = 0
+
+  - name: Apply Persistent IPv4 Forwarding
+    shell: sudo sysctl -p
+
+  - name: Disable Selinux
+    shell: sudo setenforce 0
+
+  - name: Disable Firewalld
+    shell: sudo systemctl stop firewalld
+
+  - name: ensure ipsec is running
+    service: name=ipsec state=started
+    become: yes
+
+  - name: Apply Persistent IPSEC connection
+    shell: systemctl enable ipsec.service
+    become: yes
+  
+  - name: Apply persistent frr sevice
+    shell: systemctl enable --now  frr.service
+    become: yes
+
+  - name: Activate the tunnel
+    shell: "{{ item }}" 
+    with_items:
+      - sleep 10
+      - ipsec auto --start oci-tunnel1
+      - ipsec auto --add oci-tunnel1
+      - ipsec auto --up oci-tunnel1
+      - ipsec auto --start oci-tunnel2
+      - ipsec auto --add oci-tunnel2
+      - ipsec auto --up oci-tunnel2
+    become: yes
+    ignore_errors: yes
+
+  - name: write the ffr file
+    template: src=frr.conf.j2 dest=/etc/frr/frr.conf 
+    become_user: root
+
+  - name: write the daemon file
+    template: src=daemons.j2 dest=/etc/frr/daemons
+    become_user: root
+
+  - name: start and enable frr service
+    service:
+      name: frr
+      enabled: yes
+      state: started
+    become_user: root
+    
+  - name: Restart IPSEC
+    shell: ipsec restart
+    become: yes
+
+  - name: Apply persistent frr sevice
+    shell: systemctl  restart frr.service
+    become: yes
+
+  - name: Status of IPSec
+    shell: ipsec trafficstatus
+    become: yes

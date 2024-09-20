@@ -1,0 +1,629 @@
+# Title shown in Application Information tab.
+title: OCI Network Firewall Service Deployment - Reference Architecture (LiveLabs)
+# Sub Title shown in Application Information tab.
+description: This terraform code deploys OCI Network Firewall with Intra-VCN Routing Capabilities
+schemaVersion: 1.1.0
+version: "20220725"
+
+# URL of Logo Icon used on Application Information tab. Logo must be 130x130 pixels.
+# (Optional)
+
+# Used in Application Information tab to Hyperlink Title and Logo to the Marketplace
+# Listing.
+# Also used to link to Listing Usage section for "View Instructions".
+# (Optional) If it is missing, Application Information uses the
+# "marketplace-listing-id" tag for the same purpose.
+# source:
+#   type: marketplace
+#   reference: 71285857
+
+locale: "en"
+variableGroups:
+  - title: "Hidden Variable Group"
+    visible: false
+    variables:
+      - tenancy_ocid
+      - region
+      - availability_domain_number
+      - network_strategy_enum
+      - subnet_type_enum
+      - nsg_config_enum
+      - template_name
+      - template_version
+
+  - title: "Common Compute Configuration"
+    variables:
+      - compute_compartment_ocid
+      - vm_compute_shape ## Check this
+      - spoke_vm_compute_shape ## Check this
+      - vm_flex_shape_ocpus ## Check this
+      - spoke_vm_flex_shape_ocpus ## Check this
+      - availability_domain_name
+      - ssh_public_key
+      - instance_launch_options_network_type
+
+  - title: "Common Network Configuration"
+    variables:
+      - network_compartment_ocid
+      - network_strategy
+      - subnet_span
+      - nsg_whitelist_ip
+      - nsg_display_name
+
+  - title: "Firewall Hub VCN Configuration"
+    variables:
+      - oci_network_firewall_vcn_id
+      - oci_network_firewall_vcn_display_name
+      - oci_network_firewall_vcn_cidr_block
+      - oci_network_firewall_vcn_dns_label
+      - oci_network_firewall_subnet_id
+      - oci_network_firewall_subnet_display_name
+      - oci_network_firewall_subnet_cidr_block
+      - oci_network_firewall_subnet_dns_label
+      - client_subnet_id
+      - client_subnet_display_name
+      - client_subnet_cidr_block
+      - client_subnet_dns_label
+      - server_subnet_id
+      - server_subnet_display_name
+      - server_subnet_cidr_block
+      - server_subnet_dns_label
+  
+  - title: "Spoke VCN Configuration"
+    variables:
+      - application_vcn_id
+      - application_vcn_cidr_block
+      - application_vcn_dns_label
+      - application_vcn_display_name
+      - application_compute_subnetA_id
+      - application_compute_subnetA_cidr_block
+      - application_compute_subnetA_display_name
+      - application_compute_subnetA_dns_label
+      - application_compute_subnetB_id
+      - application_compute_subnetB_cidr_block
+      - application_compute_subnetB_display_name
+      - application_compute_subnetB_dns_label
+      - spoke_nsg_display_name
+
+  - title: "OCI Network Firewall Configuration"
+    variables:
+      - oci_network_firewall_policy_action
+      - oci_network_firewall_name
+
+variables:
+  # Hidden variables
+  tenancy_ocid:
+    type: string
+    title: Tenancy ID
+    description: The Oracle Cloud Identifier (OCID) for your tenancy
+    required: true
+
+  compute_compartment_ocid:
+    type: oci:identity:compartment:id
+    required: true
+    title: Compartment OCID
+    description: The compartment in which to create all Compute resources
+    default: compartment_ocid
+
+  network_compartment_ocid:
+    type: oci:identity:compartment:id
+    required: true
+    title: Network Compartment OCID
+    description: The compartment in which to create all Network resources
+    default: compartment_ocid
+
+  region:
+    type: oci:identity:region:name
+    title: Region
+    description: The region in which to create all resources
+    required: true
+
+  availability_domain_name:
+    type: oci:identity:availabilitydomain:name
+    dependsOn:
+      compartmentId: compartment_ocid
+    required: true
+    default: 1
+    title: Availability Domain
+    description: Availability Domain
+
+  availability_domain_number:
+    type: string
+    required: false
+    description: Availability Domain Number (Not used)
+
+  ssh_public_key:
+    type: string
+    required: true
+    title: Public SSH Key string
+    description: Public SSH Key to access VM via SSH
+
+  vm_compute_shape:
+    type: oci:core:instanceshape:name
+    default: VM.Standard.E4.Flex
+    title: Firewall VCN Compute Shape
+    required: true
+    dependsOn:
+      compartmentId: compartment_ocid
+
+  spoke_vm_compute_shape:
+    type: oci:core:instanceshape:name
+    default: VM.Standard.E4.Flex
+    title: Spoke Compute Shape
+    required: true
+    description: Compute Shape of Spoke VMs
+    dependsOn:
+      compartmentId: compartment_ocid
+
+  vm_flex_shape_ocpus:
+    visible:
+      eq:
+        - vm_compute_shape
+        - "VM.Standard.E3.Flex"
+        - "VM.Standard.E4.Flex"
+    type: integer
+    default: 1
+    title: Flex Shape OCPUs
+    minimum: 1
+    maximum: 4
+    required: false
+
+  spoke_vm_flex_shape_ocpus:
+    visible:
+      eq:
+        - spoke_vm_compute_shape
+        - "VM.Standard.E3.Flex"
+        - "VM.Standard.E4.Flex"
+    type: integer
+    default: 1
+    title: Flex Shape OCPUs
+    minimum: 1
+    maximum: 4
+    required: false
+
+  instance_launch_options_network_type:
+    type: enum
+    default: "PARAVIRTUALIZED"
+    title: Launch options
+    description: NIC Attachment Type
+    enum:
+      - "PARAVIRTUALIZED"
+      - "VFIO"
+    required: true
+
+  # Network Type Options
+  network_strategy:
+    type: enum
+    title: Network Strategy
+    description: Create or use existing Network Stack (VCN and Subnet)
+    enum:
+      - "Create New VCN and Subnet"
+      - "Use Existing VCN and Subnet"
+    required: true
+    default: "Create New VCN and Subnet"
+
+  subnet_span:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: enum
+    title: Subnet Span
+    description: Choose between regional and AD specific subnets
+    enum:
+      - "Regional Subnet"
+      - "AD Specific Subnet"
+    required: true
+    default: "Regional Subnet"
+
+  oci_network_firewall_vcn_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: firewall-vcn
+    required: true
+    title: Firewall Virtual Cloud Network (VCN)
+    description: The name of the new Virtual Cloud Network (VCN)
+
+  application_vcn_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: spoke-vcn
+    required: true
+    title: Spoke Tier Virtual Cloud Network (VCN)
+    description: The name of the new Virtual Cloud Network (VCN)
+
+  oci_network_firewall_vcn_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:vcn:id
+    dependsOn:
+      compartmentId: compartment_ocid
+    required: true
+    title: Existing Network - Firewall/Hub VCN
+    description: An existing Virtual Cloud Network (VCN) in which to create the compute instances, network resources, and load balancers. If not specified, a new VCN is created.
+
+  application_vcn_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:vcn:id
+    dependsOn:
+      compartmentId: compartment_ocid
+    required: true
+    title: Existing Network - Spoke VCN
+    description: An existing Spoke Virtual Cloud Network (VCN) in which to create the compute instances, network resources, and load balancers. If not specified, a new VCN is created.
+
+  oci_network_firewall_vcn_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: 10.10.0.0/16
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    title: Firewall VCN CIDR BLOCK
+    description: The CIDR of the new Virtual Cloud Network (VCN). If you plan to peer this VCN with another VCN, the VCNs must not have overlapping CIDRs.
+
+  application_vcn_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: 10.20.0.0/16
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    title: Spoke VCN CIDR BLOCK
+    description: The CIDR of the new Virtual Cloud Network (VCN). If you plan to peer this VCN with another VCN, the VCNs must not have overlapping CIDRs.
+
+  oci_network_firewall_subnet_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:subnet:id
+    dependsOn:
+      vcnId: vcn_id
+      compartmentId: compartment_ocid
+    default: ""
+    required: true
+    title: Existing Firewall Subnet
+    description: An existing firewall subnet to use OCI Network Firewall. This subnet must already be present in the chosen VCN.
+
+  oci_network_firewall_subnet_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: firewall-subnet
+    required: true
+    title: Firewall Subnet
+    description: The name of the new Firewall Subnet
+
+  oci_network_firewall_subnet_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: 10.10.0.0/24
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    required: true
+    title: Firewall Subnet CIDR
+    description: The CIDR of the new Subnet. The new subnet's CIDR should not overlap with any other subnet CIDRs.
+
+  oci_network_firewall_subnet_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: firewall
+    title: Firewall Subnet DNS Label
+    description: Firewall Subnet DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+  
+  client_subnet_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:subnet:id
+    dependsOn:
+      vcnId: oci_network_firewall_vcn_id
+      compartmentId: compartment_ocid
+    default: ""
+    required: true
+    title: Existing Client Subnet
+    description: An existing client subnet to use for transit connectivity between hub and spoke. This subnet must already be present in the chosen VCN.
+
+  client_subnet_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: client-subnet
+    required: true
+    title: Client Subnet
+    description: The name of the new Client Subnet
+
+  client_subnet_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: 10.10.1.0/24
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    required: true
+    title: Client Subnet CIDR
+    description: The CIDR of the new Subnet. The new subnet's CIDR should not overlap with any other subnet CIDRs.
+
+  client_subnet_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: client
+    title: Client Subnet DNS Label
+    description: Client Subnet DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  server_subnet_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:subnet:id
+    dependsOn:
+      vcnId: oci_network_firewall_vcn_id
+      compartmentId: compartment_ocid
+    default: ""
+    required: true
+    title: Existing Server Subnet
+    description: An existing Server subnet to use traffic coming from outside. This subnet must already be present in the chosen VCN.
+
+  server_subnet_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: server-subnet
+    required: true
+    title: Server Subnet
+    description: The name of the new Server Subnet
+
+  server_subnet_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: 10.10.2.0/24
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    required: true
+    title: Server Subnet CIDR
+    description: The CIDR of the new Subnet. The new subnet's CIDR should not overlap with any other subnet CIDRs.
+
+  server_subnet_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: server
+    title: Server Subnet DNS Label
+    description: Server Subnet DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  application_compute_subnetA_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:subnet:id
+    dependsOn:
+      vcnId: application_vcn_id
+      compartmentId: compartment_ocid
+    default: ""
+    required: true
+    title: Existing Compute Private Subnet-A
+    description: An existing Private ServerA Subnet to use for transit connectivity between hub and spoke. This subnet must already be present in the chosen VCN.
+
+  application_compute_subnetA_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: server-subnetA
+    required: true
+    title: Server SubnetA Subnet
+    description: The name of the new Private ServerA Subnet
+
+  application_compute_subnetA_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: 10.20.1.0/24
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    required: true
+    title: Server SubnetA Private CIDR
+    description: The CIDR of the new Subnet. The new subnet's CIDR should not overlap with any other subnet CIDRs.
+
+  application_compute_subnetA_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: SubnetA
+    title: Server SubnetA DNS Label
+    description: Server SubnetA DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  application_compute_subnetB_id:
+    visible: #($network_strategy  == "Use Existing VCN and Subnet")
+      eq:
+        - network_strategy
+        - "Use Existing VCN and Subnet"
+    type: oci:core:subnet:id
+    dependsOn:
+      vcnId: application_vcn_id
+      compartmentId: compartment_ocid
+    default: ""
+    required: true
+    title: Existing Compute Server SubnetB Subnet
+    description: An existing Server SubnetB Subnet to use for transit connectivity between hub and spoke. This subnet must already be present in the chosen VCN.
+
+  application_compute_subnetB_display_name:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: server-subnetB
+    required: true
+    title: Server SubnetB Subnet
+    description: The name of the new Server SubnetB Subnet
+
+  application_compute_subnetB_cidr_block:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    default: 10.20.2.0/24
+    pattern: "^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9]).(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\/(3[0-2]|[1-2]?[0-9])$"
+    required: true
+    title: Server SubnetB Subnet CIDR
+    description: The CIDR of the new Subnet. The new subnet's CIDR should not overlap with any other subnet CIDRs.
+
+  application_compute_subnetB_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: ServerB
+    title: Server SubnetB Subnet DNS Label
+    description: Server SubnetB Subnet DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  oci_network_firewall_vcn_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: firewall
+    title: Firewall VCN DNS Label
+    description: Firewall VCN DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  application_vcn_dns_label:
+    visible: #($network_strategy  == ""Create New VCN and Subnet"")
+      eq:
+        - network_strategy
+        - "Create New VCN and Subnet"
+    type: string
+    required: true
+    default: spoke
+    title: Spoke VCN DNS Label
+    description: VCN DNS Label. Only letters and numbers, starting with a letter. 15 characters max.
+
+  nsg_whitelist_ip:
+    type: string
+    required: true
+    default: 0.0.0.0/0
+    title: Network Security Groups - Whitelisted IP
+    description: "Ingress connection to VM whitelisted from IP (range). Enter 0.0.0.0/0 or <your IP>/32"
+
+  nsg_display_name:
+    type: string
+    required: true
+    default: firewall-vcn-security-group
+    title: Network Security Group
+    description: The name of the Network Security Group
+
+  spoke_nsg_display_name:
+    type: string
+    required: true
+    default: spoke-security-group
+    title: Network Security Group
+    description: The name of the Network Security Group for Web Tier VMs
+
+  oci_network_firewall_policy_action:
+    type: string
+    required: true
+    default: ALLOW
+    title: OCI Network Firewall Policy
+    description: OCI Network Firewall Policy Action
+
+  oci_network_firewall_name:
+    type: string
+    required: true
+    default: oci-network-firewall-demo
+    title: OCI Network Firewall Name
+    description: The name of the OCI Network Firewall.
+
+outputGroups:
+  - title: "VMs Connection"
+    outputs:
+      - client_instance_public_ip
+      - server_instance_private_ip
+      - serverA_instance_private_ip
+      - serverB_instance_private_ip
+      - oci_network_firewall_ip_address
+
+outputs:
+  client_instance_public_ip:
+    type: string
+    title: Client VM Public IP
+    visible: true
+
+  server_instance_private_ip:
+    type: string
+    title: Server VM Private IP Address
+    visible: true
+
+  serverA_instance_private_ip:
+    type: string
+    title: ServerA VM Private IP Address
+    visible: true
+
+  serverB_instance_private_ip:
+    type: string
+    title: ServerB VM Private IP Address
+    visible: true
+
+  oci_network_firewall_ip_address:
+    type: string
+    title: OCI Network Firewall IP Address
+    visible: true
+
+  initial_instruction:
+    type: string
+    title: Initial Instruction
+    visible: false
+
+  subscription:
+    type: string
+    title: Subscription
+    visible: false

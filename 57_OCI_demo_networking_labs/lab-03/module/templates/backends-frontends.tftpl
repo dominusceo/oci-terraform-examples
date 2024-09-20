@@ -1,0 +1,12 @@
+!#/bin/bash
+#Autor: Ricardo D. Carrillo <ricardo.d.carrillo@oracle.com>
+#Goal: Generate inventory file to execute ansible playbooks interacting with OCI console
+[frontends]
+%{ for index, ip in fronts ~}
+${prefix}-node-${index} ansible_host=${ip} ansible_user=${user}
+%{ endfor ~}
+
+[backends]
+%{ for index, ip in backs ~}
+${prefix}-bknode-${index} ansible_host=${ip} ansible_user=${user}
+%{ endfor ~}

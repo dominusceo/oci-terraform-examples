@@ -1,0 +1,33 @@
+####################
+# Common Variables #
+####################
+environment = "prod"
+
+##################
+# Authentication #
+##################
+oci_user             = "ocid1.user.oc1..aaaaaaaakrlp2rwn3ouh45vplzlsqphkjo25i7dbodhl4wctcrzyt7sh4cta"
+oci_tenancy          = "ocid1.tenancy.oc1..aaaaaaaawquag7eeulmm6e2yoykcvigene6piosc6rwgglznmt4d5iubifuq"
+oci_region           = "us-ashburn-1"
+oci_fingerprint      = "66:df:ee:f4:c3:fe:84:90:ac:d6:50:65:ca:2e:d6:57"
+oci_key              = "~/.ssh/api_key_private.pem"
+oci_root_compartment = "ocid1.compartment.oc1..aaaaaaaawplfybzszx4gaaupjcy3ftfpebgh7bumrkzsglchoandq3gtckya"
+
+###########
+# Networking #
+###########
+vcn_cidr_block           = ["11.0.0.0/16"]
+public_subnet_cidr_block = "11.0.1.0/24"
+dns_domain_name          = "cloud.local"
+
+###################
+# Virtual Machine #
+###################
+instance_shape     = "VM.Standard.E4.Flex"
+instance_shape_cpu = "2"
+instance_shape_mem = "4"
+
+###################
+# A. Domains ASH  #
+###################
+availability_domains = ["ERDj:US-ASHBURN-AD-1", "ERDj:US-ASHBURN-AD-2", "ERDj:US-ASHBURN-AD-3"]
